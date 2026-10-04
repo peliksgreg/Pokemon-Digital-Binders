@@ -1,8 +1,8 @@
 # Pokémon Digital Binder
 
 A mobile-first digital binder for every Pokémon TCG card by an illustrator.
-The default binder is **Shinji Kanda** (the same set of cards as
-[artofpkm.com/illustrators/shinji-kanda](https://www.artofpkm.com/illustrators/shinji-kanda)).
+The default binder is **Shinji Kanda** (the same 55 cards as
+[artofpkm.com/illustrators/shinji-kanda/cards](https://www.artofpkm.com/illustrators/shinji-kanda/cards)).
 
 It is a single static page (`index.html`): no build step, no server code, no account.
 
@@ -24,21 +24,25 @@ It is a single static page (`index.html`): no build step, no server code, no acc
 ## Card data
 
 The Shinji Kanda list is built into the app (`cards.js`), so it loads instantly
-and needs no card API. It has 40 cards: 33 TCG prints (including promos and one
-Japan-only card) and 7 TCG Pocket cards. It combines the open
-[TCGdex](https://github.com/tcgdex/cards-database) and
-[PokemonTCG](https://github.com/PokemonTCG/pokemon-tcg-data) datasets.
+and needs no card API. It matches
+[artofpkm.com/illustrators/shinji-kanda/cards](https://www.artofpkm.com/illustrators/shinji-kanda/cards)
+card for card: 55 cards (45 TCG, 10 TCG Pocket), in the site's order, with the
+site's card images, rarities and set names (Japanese releases, as the site lists them).
+In the card details, **Source** links to the card's page on artofpkm.com.
 
-Each card has several image sources (pokemontcg.io, TCGdex English, then the
-Japanese print of the same artwork). If one host has no picture, the next one is tried.
+Marks saved with the earlier English-print list carry over to the matching card.
 
-To rebuild the list, or build one for another illustrator:
+To rebuild the list, or build one for another illustrator on artofpkm.com
+(the slug is the one in the site's URL):
 
 ```sh
-git clone --depth 1 https://github.com/tcgdex/cards-database.git
-git clone --depth 1 https://github.com/PokemonTCG/pokemon-tcg-data.git
-python3 tools/build_cards.py cards-database pokemon-tcg-data "Shinji Kanda" > cards.js
+python3 tools/build_artofpkm.py shinji-kanda "Shinji Kanda" cards.js > cards.new.js && mv cards.new.js cards.js
 ```
+
+`tools/build_cards.py` builds a list from the open
+[TCGdex](https://github.com/tcgdex/cards-database) and
+[PokemonTCG](https://github.com/PokemonTCG/pokemon-tcg-data) datasets instead
+(English prints, with pokemontcg.io and TCGdex images).
 
 Illustrators without a built-in list are loaded live from the
 [TCGdex API](https://tcgdex.dev), with [pokemontcg.io](https://pokemontcg.io) as an
