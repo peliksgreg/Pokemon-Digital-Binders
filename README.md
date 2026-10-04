@@ -23,26 +23,30 @@ It is a single static page (`index.html`): no build step, no server code, no acc
 
 ## Card data
 
-The Shinji Kanda list is built into the app (`cards.js`), so it loads instantly
-and needs no card API. It has 40 cards: 33 TCG prints (including promos and one
-Japan-only card) and 7 TCG Pocket cards. It combines the open
-[TCGdex](https://github.com/tcgdex/cards-database) and
-[PokemonTCG](https://github.com/PokemonTCG/pokemon-tcg-data) datasets.
+The Shinji Kanda list matches
+[artofpkm.com/illustrators/shinji-kanda/cards](https://www.artofpkm.com/illustrators/shinji-kanda/cards):
+**55 cards**, the Japanese TCG prints (including mirror variants and deck reprints)
+plus the TCG Pocket cards, in the same order as the site.
 
-Each card has several image sources (pokemontcg.io, TCGdex English, then the
-Japanese print of the same artwork). If one host has no picture, the next one is tried.
+The list is embedded inside `index.html` (the `<script id="card-data">` block),
+so the single file works on its own, even opened straight from a phone's Downloads.
+Card images come from artofpkm's scans. If one fails to load, the app tries
+TCGdex (Japanese print), then pokemontcg.io / TCGdex (English print of the same artwork).
 
-To rebuild the list, or build one for another illustrator:
+To rebuild the list (needs access to artofpkm.com and GitHub):
 
 ```sh
+curl -sL https://www.artofpkm.com/illustrators/shinji-kanda/cards -o page.html
 git clone --depth 1 https://github.com/tcgdex/cards-database.git
 git clone --depth 1 https://github.com/PokemonTCG/pokemon-tcg-data.git
-python3 tools/build_cards.py cards-database pokemon-tcg-data "Shinji Kanda" > cards.js
+python3 tools/build_from_artofpkm.py page.html cards-database pokemon-tcg-data "Shinji Kanda" > cards.js
+python3 tools/inline_data.py cards.js index.html
 ```
 
-Illustrators without a built-in list are loaded live from the
-[TCGdex API](https://tcgdex.dev), with [pokemontcg.io](https://pokemontcg.io) as an
-English fallback. Their lists refresh once a week, or on **Settings → Refresh data**.
+`tools/build_cards.py` builds an English-print list from the two databases alone,
+for illustrators without an artofpkm page. Illustrators without a built-in list are
+loaded live from the [TCGdex API](https://tcgdex.dev), with
+[pokemontcg.io](https://pokemontcg.io) as an English fallback.
 
 ## Using it on your phone
 
@@ -54,8 +58,8 @@ English fallback. Their lists refresh once a week, or on **Settings → Refresh 
    Chrome: ⋮ → *Add to Home screen*). It then opens full screen like an app and works offline.
 
 **Fully local**
-- **Android**: copy `index.html` to the phone and open it in Chrome or Firefox
-  (e.g. `file:///sdcard/Download/index.html`), or use a local web-server app.
+- **Android**: copy `index.html` to the phone and open it in Chrome or Firefox.
+  The file is self-contained, so opening it from Downloads works.
 - **iPhone/iPad**: the Files app preview doesn't run JavaScript. Use GitHub Pages,
   or serve the folder from a computer on the same Wi-Fi:
   ```sh
