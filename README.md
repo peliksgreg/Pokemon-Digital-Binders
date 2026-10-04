@@ -1,8 +1,8 @@
 # Pokémon Digital Binder
 
 A mobile-first digital binder for every Pokémon TCG card by an illustrator.
-The default binder is **Shinji Kanda** (the same set of cards as
-[artofpkm.com/illustrators/shinji-kanda](https://www.artofpkm.com/illustrators/shinji-kanda)).
+The default binder is **Shinji Kanda** (the same 55 cards as
+[artofpkm.com/illustrators/shinji-kanda/cards](https://www.artofpkm.com/illustrators/shinji-kanda/cards)).
 
 It is a single static page (`index.html`): no build step, no server code, no account.
 
@@ -24,29 +24,39 @@ It is a single static page (`index.html`): no build step, no server code, no acc
 ## Card data
 
 The Shinji Kanda list matches
-[artofpkm.com/illustrators/shinji-kanda/cards](https://www.artofpkm.com/illustrators/shinji-kanda/cards):
-**55 cards**, the Japanese TCG prints (including mirror variants and deck reprints)
-plus the TCG Pocket cards, in the same order as the site.
+[artofpkm.com/illustrators/shinji-kanda/cards](https://www.artofpkm.com/illustrators/shinji-kanda/cards)
+card for card: 55 cards (45 TCG, 10 TCG Pocket), in the site's order, with the
+site's card images, rarities and set names (Japanese releases, as the site lists them).
+In the card details, **Source** links to the card's page on artofpkm.com.
 
 The list is embedded inside `index.html` (the `<script id="card-data">` block),
 so the single file works on its own, even opened straight from a phone's Downloads.
-Card images come from artofpkm's scans. If one fails to load, the app tries
-TCGdex (Japanese print), then pokemontcg.io / TCGdex (English print of the same artwork).
+If an artofpkm image fails to load, the app tries TCGdex (same Japanese print),
+then pokemontcg.io / TCGdex (English print of the same artwork).
 
-To rebuild the list (needs access to artofpkm.com and GitHub):
+Marks saved with the earlier English-print list carry over to the matching card.
+
+To rebuild the list, or build one for another illustrator on artofpkm.com
+(the slug is the one in the site's URL):
 
 ```sh
+python3 tools/build_artofpkm.py shinji-kanda "Shinji Kanda" > cards.js
+# optional: add fallback images from the open datasets
 curl -sL https://www.artofpkm.com/illustrators/shinji-kanda/cards -o page.html
 git clone --depth 1 https://github.com/tcgdex/cards-database.git
 git clone --depth 1 https://github.com/PokemonTCG/pokemon-tcg-data.git
-python3 tools/build_from_artofpkm.py page.html cards-database pokemon-tcg-data "Shinji Kanda" > cards.js
-python3 tools/inline_data.py cards.js index.html
+python3 tools/add_fallback_images.py cards.js page.html cards-database pokemon-tcg-data > cards.full.js
+python3 tools/inline_data.py cards.full.js index.html
 ```
 
-`tools/build_cards.py` builds an English-print list from the two databases alone,
-for illustrators without an artofpkm page. Illustrators without a built-in list are
-loaded live from the [TCGdex API](https://tcgdex.dev), with
-[pokemontcg.io](https://pokemontcg.io) as an English fallback.
+`tools/build_cards.py` builds a list from the open
+[TCGdex](https://github.com/tcgdex/cards-database) and
+[PokemonTCG](https://github.com/PokemonTCG/pokemon-tcg-data) datasets instead
+(English prints, with pokemontcg.io and TCGdex images).
+
+Illustrators without a built-in list are loaded live from the
+[TCGdex API](https://tcgdex.dev), with [pokemontcg.io](https://pokemontcg.io) as an
+English fallback. Their lists refresh once a week, or on **Settings → Refresh data**.
 
 ## Using it on your phone
 
