@@ -1,0 +1,884 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Shinji Kanda Binder</title>
+<meta name="description" content="Digital Pokémon TCG binder: tap a card to mark it owned.">
+<meta name="theme-color" content="#16131f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Binder">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+  :root {
+    --bg: #16131f;
+    --bg-2: #211c2e;
+    --panel: #2a2438;
+    --line: #3b3350;
+    --text: #f3f0fa;
+    --muted: #a59cbb;
+    --accent: #f5c542;
+    --accent-ink: #2a2000;
+    --owned: #4ad395;
+    --danger: #ff6b6b;
+    --pocket: rgba(255, 255, 255, .05);
+    --radius: 14px;
+    --safe-t: env(safe-area-inset-top, 0px);
+    --safe-b: env(safe-area-inset-bottom, 0px);
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: radial-gradient(120% 80% at 50% 0%, #2b2140 0%, var(--bg) 60%) fixed, var(--bg);
+    color: var(--text);
+    font: 15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior-y: none;
+  }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  [hidden] { display: none !important; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+  /* ---------- Header ---------- */
+  header {
+    position: sticky; top: 0; z-index: 10;
+    padding: calc(10px + var(--safe-t)) 16px 10px;
+    background: rgba(22, 19, 31, .88);
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--line);
+  }
+  .title-row { display: flex; align-items: center; gap: 10px; }
+  h1 { font-size: 18px; margin: 0; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  h1 small { display: block; font-size: 12px; font-weight: 500; color: var(--muted); }
+  .icon-btn {
+    width: 40px; height: 40px; flex: none; border-radius: 12px;
+    border: 1px solid var(--line); background: var(--panel);
+    display: grid; place-items: center;
+  }
+  .icon-btn svg { width: 20px; height: 20px; }
+
+  .progress { margin-top: 10px; }
+  .progress-meta { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); margin-bottom: 5px; }
+  .progress-meta b { color: var(--text); }
+  .bar { height: 8px; border-radius: 99px; background: var(--bg-2); overflow: hidden; }
+  .bar > span { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), var(--owned)); transition: width .3s ease; }
+
+  .controls { display: flex; gap: 8px; margin-top: 10px; }
+  .search {
+    flex: 1; min-width: 0; height: 38px; padding: 0 12px;
+    border-radius: 10px; border: 1px solid var(--line); background: var(--bg-2);
+  }
+  .seg { display: flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; flex: none; }
+  .seg button { border: 0; background: var(--bg-2); padding: 0 10px; height: 36px; font-size: 13px; color: var(--muted); }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+
+  /* ---------- Main ---------- */
+  main { padding: 12px 0 calc(90px + var(--safe-b)); }
+  .status { text-align: center; color: var(--muted); padding: 48px 24px; }
+  .status button { margin-top: 12px; }
+
+  /* Binder view: horizontal swipe between 3x3 pages using native scroll-snap */
+  .binder {
+    display: flex; overflow-x: auto; scroll-snap-type: x mandatory;
+    scrollbar-width: none; -webkit-overflow-scrolling: touch;
+  }
+  .binder::-webkit-scrollbar { display: none; }
+  .page {
+    flex: 0 0 100%; scroll-snap-align: center; padding: 0 16px;
+  }
+  .page-inner {
+    max-width: 520px; margin: 0 auto; padding: 10px;
+    background: linear-gradient(180deg, #2d2640, #241e33);
+    border: 1px solid var(--line); border-radius: 18px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .35), inset 0 1px 0 rgba(255, 255, 255, .05);
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+  }
+  .grid {
+    display: grid; gap: 10px; padding: 0 16px;
+    grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+    max-width: 1100px; margin: 0 auto;
+  }
+
+  /* ---------- Card slot ---------- */
+  .slot {
+    position: relative; aspect-ratio: 63 / 88;
+    border-radius: 8px; background: var(--pocket);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06);
+  }
+  .card {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    padding: 0; border: 0; border-radius: 8px; overflow: hidden;
+    background: #1b1726; display: block;
+    transition: transform .12s ease, filter .2s ease, opacity .2s ease;
+    touch-action: manipulation;
+  }
+  .card:active { transform: scale(.96); }
+  .card img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .card .fallback {
+    position: absolute; inset: 0; display: grid; place-items: center;
+    padding: 6px; text-align: center; font-size: 11px; color: var(--muted);
+  }
+  .card[aria-pressed="false"] img { filter: grayscale(1) brightness(.55); }
+  .card[aria-pressed="false"] { opacity: .8; }
+  .card[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--owned), 0 4px 14px rgba(74, 211, 149, .25); }
+  .badge {
+    position: absolute; top: 5px; left: 5px; width: 22px; height: 22px;
+    border-radius: 50%; display: grid; place-items: center;
+    background: var(--owned); color: #06291a; font-size: 13px; font-weight: 800;
+    transform: scale(0); transition: transform .18s cubic-bezier(.3, 1.6, .5, 1);
+    pointer-events: none;
+  }
+  .card[aria-pressed="true"] .badge { transform: scale(1); }
+  .num {
+    position: absolute; bottom: 4px; left: 4px; right: 4px;
+    font-size: 10px; text-align: center; color: #fff;
+    background: rgba(0, 0, 0, .6); border-radius: 6px; padding: 1px 4px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    pointer-events: none;
+  }
+  .info {
+    position: absolute; top: 2px; right: 2px; width: 32px; height: 32px;
+    border: 0; background: none; padding: 0; display: grid; place-items: center;
+  }
+  .info span {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: rgba(0, 0, 0, .6); color: #fff; font-size: 12px; font-weight: 700;
+    display: grid; place-items: center; font-family: Georgia, serif; font-style: italic;
+  }
+
+  /* ---------- Bottom pager ---------- */
+  .pager {
+    position: fixed; left: 50%; bottom: calc(14px + var(--safe-b)); transform: translateX(-50%);
+    z-index: 9; display: flex; align-items: center; gap: 6px;
+    background: rgba(42, 36, 56, .95); border: 1px solid var(--line);
+    border-radius: 99px; padding: 5px; box-shadow: 0 8px 24px rgba(0, 0, 0, .4);
+  }
+  .pager button { width: 40px; height: 40px; border-radius: 50%; border: 0; background: var(--bg-2); font-size: 18px; }
+  .pager button:disabled { opacity: .35; }
+  .pager select {
+    height: 40px; border-radius: 99px; border: 0; background: transparent;
+    padding: 0 8px; font-weight: 600; text-align: center;
+  }
+
+  /* ---------- Dialogs ---------- */
+  dialog {
+    border: 1px solid var(--line); border-radius: 18px; padding: 0;
+    background: var(--panel); color: var(--text);
+    width: min(440px, calc(100vw - 32px)); max-height: calc(100dvh - 32px);
+  }
+  dialog[open] { display: flex; flex-direction: column; }
+  dialog::backdrop { background: rgba(8, 6, 14, .75); backdrop-filter: blur(4px); }
+  .dlg-head { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+  .dlg-head h2 { margin: 0; font-size: 16px; flex: 1; min-width: 0; }
+  .dlg-body { padding: 16px; overflow: auto; }
+  .viewer-img {
+    display: block; margin: 0 auto; border-radius: 12px; background: #1b1726; object-fit: contain;
+    aspect-ratio: 63 / 88; width: 100%; max-width: calc((100dvh - 290px) * 63 / 88);
+  }
+  .meta { margin: 12px 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 14px; }
+  .meta dt { color: var(--muted); }
+  .meta dd { margin: 0; }
+  .row { display: flex; gap: 8px; }
+  .row > * { flex: 1; white-space: nowrap; }
+  #vToggle { flex: 1.4; }
+  .btn {
+    min-height: 44px; border-radius: 12px; border: 1px solid var(--line);
+    background: var(--bg-2); padding: 0 14px; font-weight: 600;
+  }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+  .btn.owned { background: var(--owned); color: #06291a; border-color: transparent; }
+  .btn.danger { color: var(--danger); }
+  label.field { display: block; margin-bottom: 14px; font-size: 13px; color: var(--muted); }
+  label.field input, label.field select, label.field textarea {
+    display: block; width: 100%; margin-top: 6px; padding: 10px 12px;
+    border-radius: 10px; border: 1px solid var(--line); background: var(--bg-2); font-size: 15px;
+  }
+  textarea { min-height: 90px; resize: vertical; font-family: ui-monospace, monospace; font-size: 12px !important; }
+  .section-title { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 18px 0 8px; }
+  .hint { font-size: 12px; color: var(--muted); margin: 6px 0 0; }
+  .stack > * + * { margin-top: 8px; }
+
+  /* ---------- Toast ---------- */
+  .toast {
+    position: fixed; left: 50%; bottom: calc(76px + var(--safe-b)); z-index: 20;
+    transform: translate(-50%, 20px); opacity: 0; pointer-events: none;
+    transition: opacity .2s, transform .2s;
+    background: #f3f0fa; color: #16131f; border-radius: 12px;
+    padding: 8px 8px 8px 14px; display: flex; align-items: center; gap: 12px;
+    font-size: 14px; font-weight: 500; max-width: calc(100vw - 32px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .4);
+  }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+  .toast button { border: 0; background: #16131f; color: var(--accent); border-radius: 8px; padding: 6px 10px; font-weight: 700; }
+  .toast button[hidden] { display: none; }
+
+  @media (min-width: 720px) {
+    .grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; }
+    .page-inner { gap: 12px; padding: 14px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; scroll-behavior: auto !important; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="title-row">
+    <h1 id="title">Shinji Kanda<small>Illustrator binder</small></h1>
+    <button class="icon-btn" id="viewToggle" aria-label="Switch to grid view" title="Switch view">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+    </button>
+    <button class="icon-btn" id="settingsBtn" aria-label="Settings" title="Settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+    </button>
+  </div>
+  <div class="progress" aria-live="polite">
+    <div class="progress-meta"><span><b id="ownedCount">0</b> / <span id="totalCount">0</span> owned</span><span id="pct">0%</span></div>
+    <div class="bar"><span id="barFill"></span></div>
+  </div>
+  <div class="controls">
+    <label class="sr-only" for="search">Search cards</label>
+    <input class="search" id="search" type="search" placeholder="Search name or set…" autocomplete="off" enterkeyhint="search">
+    <div class="seg" role="group" aria-label="Filter">
+      <button data-filter="all" aria-pressed="true">All</button>
+      <button data-filter="owned" aria-pressed="false">Have</button>
+      <button data-filter="missing" aria-pressed="false">Need</button>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+  <div class="status" id="status">Loading cards…</div>
+  <div id="cards"></div>
+</main>
+
+<nav class="pager" id="pager" hidden aria-label="Binder pages">
+  <button id="prevPage" aria-label="Previous page">‹</button>
+  <label class="sr-only" for="pageSelect">Page</label>
+  <select id="pageSelect"></select>
+  <button id="nextPage" aria-label="Next page">›</button>
+</nav>
+
+<div class="toast" id="toast" role="status"><span id="toastMsg"></span><button id="toastUndo" hidden>Undo</button></div>
+
+<!-- Card viewer -->
+<dialog id="viewer">
+  <div class="dlg-head">
+    <h2 id="vName">Card</h2>
+    <button class="icon-btn" data-close aria-label="Close">✕</button>
+  </div>
+  <div class="dlg-body">
+    <img class="viewer-img" id="vImg" alt="">
+    <dl class="meta" id="vMeta"></dl>
+    <div class="row">
+      <button class="btn" id="vPrev" aria-label="Previous card">‹ Prev</button>
+      <button class="btn" id="vToggle">Mark owned</button>
+      <button class="btn" id="vNext" aria-label="Next card">Next ›</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- Settings -->
+<dialog id="settings">
+  <div class="dlg-head">
+    <h2>Settings</h2>
+    <button class="icon-btn" data-close aria-label="Close">✕</button>
+  </div>
+  <div class="dlg-body">
+    <form id="sourceForm">
+      <label class="field">Illustrator
+        <input id="sArtist" required autocomplete="off">
+      </label>
+      <label class="field">Card language
+        <select id="sLang">
+          <option value="en">English</option>
+          <option value="ja">Japanese</option>
+          <option value="fr">French</option>
+          <option value="de">German</option>
+          <option value="es">Spanish</option>
+          <option value="it">Italian</option>
+        </select>
+      </label>
+      <div class="row">
+        <button class="btn primary" type="submit">Load binder</button>
+        <button class="btn" type="button" id="sRefresh">Refresh data</button>
+      </div>
+      <p class="hint" id="sInfo"></p>
+    </form>
+
+    <div class="section-title">Backup</div>
+    <p class="hint" style="margin-bottom:10px">Your owned list lives only on this device. Export it to keep a backup or move it to another phone.</p>
+    <div class="stack">
+      <div class="row">
+        <button class="btn" id="exportFile">Download file</button>
+        <button class="btn" id="exportCopy">Copy text</button>
+      </div>
+      <label class="field">Import (paste backup text or choose a file)
+        <textarea id="importText" placeholder='{"owned":["swsh1-1", …]}'></textarea>
+      </label>
+      <div class="row">
+        <button class="btn" id="importFileBtn">Choose file…</button>
+        <button class="btn primary" id="importApply">Import</button>
+      </div>
+      <input type="file" id="importFile" accept="application/json,.json,text/plain" hidden>
+    </div>
+
+    <div class="section-title">Danger zone</div>
+    <button class="btn danger" id="resetOwned" style="width:100%">Clear all owned marks</button>
+  </div>
+</dialog>
+
+<script>
+"use strict";
+
+/* =========================================================================
+   Config
+   ========================================================================= */
+const DEFAULTS = { artist: "Shinji Kanda", lang: "en" };
+const PAGE_SIZE = 9;                       // classic 9-pocket binder page
+const CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // re-fetch card list weekly
+const STORAGE_PREFIX = "pkm-binder:v1:";
+
+/* =========================================================================
+   Storage: localStorage can throw (private mode, blocked site data),
+   so every access goes through this wrapper with an in-memory fallback.
+   ========================================================================= */
+const store = (() => {
+  const mem = new Map();
+  let ls = null;
+  try { ls = window.localStorage; ls.setItem("__t", "1"); ls.removeItem("__t"); } catch { ls = null; }
+  return {
+    persistent: !!ls,
+    get(key, fallback = null) {
+      const k = STORAGE_PREFIX + key;
+      try {
+        const raw = ls ? ls.getItem(k) : mem.get(k);
+        return raw == null ? fallback : JSON.parse(raw);
+      } catch { return fallback; }
+    },
+    set(key, value) {
+      const k = STORAGE_PREFIX + key, raw = JSON.stringify(value);
+      try { ls ? ls.setItem(k, raw) : mem.set(k, raw); } catch { mem.set(k, raw); }
+    },
+  };
+})();
+
+/* =========================================================================
+   Data sources. Each returns a normalized list of
+   { id, name, set, number, rarity, img, imgLarge, sort }.
+   TCGdex is primary (free, CORS-enabled, many languages);
+   pokemontcg.io is a fallback for English.
+   ========================================================================= */
+async function fetchJSON(url, { timeout = 20000 } = {}) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeout);
+  try {
+    const res = await fetch(url, { signal: ctrl.signal });
+    if (!res.ok) throw new Error(`HTTP ${res.status} from ${new URL(url).host}`);
+    return await res.json();
+  } finally { clearTimeout(timer); }
+}
+
+const numericKey = (n) => {
+  const m = String(n ?? "").match(/\d+/);
+  return m ? parseInt(m[0], 10) : Number.MAX_SAFE_INTEGER;
+};
+
+const sources = {
+  async tcgdex(artist, lang) {
+    const base = `https://api.tcgdex.net/v2/${lang}`;
+    const [cards, sets] = await Promise.all([
+      fetchJSON(`${base}/cards?illustrator=${encodeURIComponent(artist)}`),
+      fetchJSON(`${base}/sets`).catch(() => []),  // set names are nice-to-have
+    ]);
+    if (!Array.isArray(cards)) throw new Error("Unexpected TCGdex response");
+    const setIndex = new Map(sets.map((s, i) => [s.id, { name: s.name, order: i }]));
+    return cards.map((c) => {
+      // Card ids are "<setId>-<localId>"; strip the suffix to find the set.
+      const suffix = `-${c.localId}`;
+      const setId = c.id.endsWith(suffix) ? c.id.slice(0, -suffix.length) : c.id.split("-")[0];
+      const set = setIndex.get(setId);
+      return {
+        id: c.id,
+        name: c.name,
+        set: set ? set.name : setId,
+        number: c.localId,
+        rarity: "",
+        img: c.image ? `${c.image}/low.webp` : "",
+        imgLarge: c.image ? `${c.image}/high.webp` : "",
+        sort: [set ? set.order : 1e6, setId, numericKey(c.localId), c.localId],
+      };
+    });
+  },
+
+  async pokemontcg(artist) {
+    const q = encodeURIComponent(`artist:"${artist}"`);
+    const out = [];
+    for (let page = 1; page < 20; page++) {
+      const json = await fetchJSON(
+        `https://api.pokemontcg.io/v2/cards?q=${q}&page=${page}&pageSize=250&orderBy=set.releaseDate,number`
+      );
+      out.push(...json.data);
+      if (out.length >= json.totalCount || json.data.length === 0) break;
+    }
+    return out.map((c) => ({
+      id: c.id,
+      name: c.name,
+      set: c.set?.name ?? "",
+      number: c.number,
+      rarity: c.rarity ?? "",
+      img: c.images?.small ?? "",
+      imgLarge: c.images?.large ?? c.images?.small ?? "",
+      sort: [c.set?.releaseDate ?? "9999", c.set?.id ?? "", numericKey(c.number), c.number],
+    }));
+  },
+};
+
+function compareSort(a, b) {
+  for (let i = 0; i < a.sort.length; i++) {
+    const x = a.sort[i], y = b.sort[i];
+    if (x === y) continue;
+    return typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y));
+  }
+  return 0;
+}
+
+async function loadCards(artist, lang) {
+  const errors = [];
+  const attempts = [["TCGdex", () => sources.tcgdex(artist, lang)]];
+  if (lang === "en") attempts.push(["pokemontcg.io", () => sources.pokemontcg(artist)]);
+  for (const [name, fn] of attempts) {
+    try {
+      const cards = await fn();
+      if (cards.length) {
+        cards.sort(compareSort);
+        return { cards: cards.map(({ sort, ...c }) => c), source: name };
+      }
+      errors.push(`${name}: no cards found`);
+    } catch (e) {
+      errors.push(`${name}: ${e.name === "AbortError" ? "timed out" : e.message}`);
+    }
+  }
+  throw new Error(errors.join(" · "));
+}
+
+/* =========================================================================
+   State
+   ========================================================================= */
+const state = {
+  artist: store.get("artist", DEFAULTS.artist),
+  lang: store.get("lang", DEFAULTS.lang),
+  view: store.get("view", "binder"),   // "binder" | "grid"
+  filter: "all",                       // "all" | "owned" | "missing"
+  query: "",
+  cards: [],
+  byId: new Map(),
+  owned: new Set(),
+  visible: [],                          // cards after filter/search
+  meta: null,                           // { source, fetchedAt }
+};
+
+const binderKey = () => `${state.lang}:${state.artist.trim().toLowerCase()}`;
+const ownedKey = () => `owned:${state.artist.trim().toLowerCase()}`;
+const saveOwned = () => store.set(ownedKey(), [...state.owned]);
+
+/* =========================================================================
+   DOM helpers
+   ========================================================================= */
+const $ = (sel) => document.querySelector(sel);
+const els = {
+  title: $("#title"), status: $("#status"), cards: $("#cards"),
+  ownedCount: $("#ownedCount"), totalCount: $("#totalCount"), pct: $("#pct"), barFill: $("#barFill"),
+  search: $("#search"), viewToggle: $("#viewToggle"),
+  pager: $("#pager"), pageSelect: $("#pageSelect"), prevPage: $("#prevPage"), nextPage: $("#nextPage"),
+  toast: $("#toast"), toastMsg: $("#toastMsg"), toastUndo: $("#toastUndo"),
+  viewer: $("#viewer"), settings: $("#settings"),
+};
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+/* =========================================================================
+   Rendering
+   ========================================================================= */
+function cardHTML(c) {
+  const owned = state.owned.has(c.id);
+  const label = `${c.name}, ${c.set} ${c.number}`;
+  return `<div class="slot">
+    <button class="card" data-id="${esc(c.id)}" aria-pressed="${owned}" aria-label="${esc(label)}">
+      ${c.img
+        ? `<img src="${esc(c.img)}" alt="" loading="lazy" decoding="async" draggable="false">`
+        : ""}
+      <span class="fallback" ${c.img ? "hidden" : ""}>${esc(c.name)}<br>${esc(c.set)}</span>
+      <span class="badge" aria-hidden="true">✓</span>
+      <span class="num">${esc(c.number)} · ${esc(c.set)}</span>
+    </button>
+    <button class="info" data-info="${esc(c.id)}" aria-label="Details for ${esc(c.name)}"><span>i</span></button>
+  </div>`;
+}
+
+function computeVisible() {
+  const q = state.query.trim().toLowerCase();
+  state.visible = state.cards.filter((c) => {
+    if (state.filter === "owned" && !state.owned.has(c.id)) return false;
+    if (state.filter === "missing" && state.owned.has(c.id)) return false;
+    return !q || c.name.toLowerCase().includes(q) || c.set.toLowerCase().includes(q) || String(c.number).toLowerCase() === q;
+  });
+}
+
+function render() {
+  computeVisible();
+  updateStats();
+  const list = state.visible;
+
+  if (!state.cards.length) { els.cards.innerHTML = ""; els.pager.hidden = true; return; }
+  if (!list.length) {
+    els.cards.innerHTML = `<div class="status">No cards match.</div>`;
+    els.pager.hidden = true;
+    return;
+  }
+
+  if (state.view === "grid") {
+    els.cards.className = "grid";
+    els.cards.innerHTML = list.map(cardHTML).join("");
+    els.pager.hidden = true;
+  } else {
+    const pages = [];
+    for (let i = 0; i < list.length; i += PAGE_SIZE) {
+      const chunk = list.slice(i, i + PAGE_SIZE);
+      const empties = PAGE_SIZE - chunk.length;  // keep empty pockets on the last page
+      pages.push(`<section class="page" aria-label="Page ${pages.length + 1}"><div class="page-inner">${
+        chunk.map(cardHTML).join("") + `<div class="slot"></div>`.repeat(empties)
+      }</div></section>`);
+    }
+    els.cards.className = "binder";
+    els.cards.innerHTML = pages.join("");
+    els.pageSelect.innerHTML = pages.map((_, i) => `<option value="${i}">${i + 1} / ${pages.length}</option>`).join("");
+    els.pager.hidden = false;
+    const saved = Math.min(store.get(`page:${binderKey()}`, 0), pages.length - 1);
+    goToPage(state.filter === "all" && !state.query ? saved : 0, false);
+  }
+  els.viewToggle.setAttribute("aria-label", state.view === "grid" ? "Switch to binder view" : "Switch to grid view");
+}
+
+function updateStats() {
+  const total = state.cards.length;
+  const owned = state.cards.reduce((n, c) => n + state.owned.has(c.id), 0);
+  els.ownedCount.textContent = owned;
+  els.totalCount.textContent = total;
+  const pct = total ? Math.round((owned / total) * 100) : 0;
+  els.pct.textContent = `${pct}%`;
+  els.barFill.style.width = `${pct}%`;
+}
+
+/* Image fallback: webp → png → text placeholder. Uses a capturing listener
+   because "error" doesn't bubble. */
+els.cards.addEventListener("error", (e) => {
+  const img = e.target;
+  if (img.tagName !== "IMG") return;
+  if (img.src.endsWith(".webp")) { img.src = img.src.replace(/\.webp$/, ".png"); return; }
+  img.remove();
+  img.closest?.(".card")?.querySelector(".fallback")?.removeAttribute("hidden");
+}, true);
+
+/* =========================================================================
+   Binder paging
+   ========================================================================= */
+const pageCount = () => els.cards.children.length;
+const currentPage = () => Math.round(els.cards.scrollLeft / Math.max(1, els.cards.clientWidth));
+
+function goToPage(i, smooth = true) {
+  i = Math.max(0, Math.min(i, pageCount() - 1));
+  els.cards.scrollTo({ left: i * els.cards.clientWidth, behavior: smooth ? "smooth" : "auto" });
+  syncPager(i);
+}
+function syncPager(i = currentPage()) {
+  els.pageSelect.value = String(i);
+  els.prevPage.disabled = i <= 0;
+  els.nextPage.disabled = i >= pageCount() - 1;
+  if (state.filter === "all" && !state.query) store.set(`page:${binderKey()}`, i);
+}
+let scrollRaf = 0;
+els.cards.addEventListener("scroll", () => {
+  if (state.view !== "binder") return;
+  cancelAnimationFrame(scrollRaf);
+  scrollRaf = requestAnimationFrame(() => syncPager());
+}, { passive: true });
+els.prevPage.addEventListener("click", () => goToPage(currentPage() - 1));
+els.nextPage.addEventListener("click", () => goToPage(currentPage() + 1));
+els.pageSelect.addEventListener("change", () => goToPage(+els.pageSelect.value));
+window.addEventListener("resize", () => { if (state.view === "binder") goToPage(+els.pageSelect.value || 0, false); });
+
+/* =========================================================================
+   Owned toggling
+   ========================================================================= */
+let lastToggle = null;
+
+function setOwned(id, owned) {
+  owned ? state.owned.add(id) : state.owned.delete(id);
+  saveOwned();
+  // Update in place rather than re-rendering, so the page doesn't jump.
+  els.cards.querySelectorAll(`.card[data-id="${CSS.escape(id)}"]`).forEach((b) => b.setAttribute("aria-pressed", owned));
+  updateStats();
+  if (els.viewer.open && viewerId === id) syncViewer();
+}
+
+function toggleOwned(id) {
+  const owned = !state.owned.has(id);
+  setOwned(id, owned);
+  lastToggle = { id, owned };
+  navigator.vibrate?.(owned ? 12 : [6, 40, 6]);
+  const c = state.byId.get(id);
+  toast(`${owned ? "Added" : "Removed"}: ${c?.name ?? id}`, true);
+}
+
+els.cards.addEventListener("click", (e) => {
+  const info = e.target.closest("[data-info]");
+  if (info) { openViewer(info.dataset.info); return; }
+  const card = e.target.closest(".card");
+  if (card) toggleOwned(card.dataset.id);
+});
+els.cards.addEventListener("contextmenu", (e) => {
+  // Long-press on a card opens details instead of the browser image menu.
+  const card = e.target.closest(".card");
+  if (card) { e.preventDefault(); openViewer(card.dataset.id); }
+});
+
+/* =========================================================================
+   Toast
+   ========================================================================= */
+let toastTimer = 0;
+function toast(msg, undoable = false) {
+  els.toastMsg.textContent = msg;
+  els.toastUndo.hidden = !undoable;
+  els.toast.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => els.toast.classList.remove("show"), undoable ? 3500 : 2500);
+}
+els.toastUndo.addEventListener("click", () => {
+  if (!lastToggle) return;
+  setOwned(lastToggle.id, !lastToggle.owned);
+  lastToggle = null;
+  toast("Undone");
+});
+
+/* =========================================================================
+   Viewer
+   ========================================================================= */
+let viewerId = null;
+
+function openViewer(id) {
+  viewerId = id;
+  syncViewer();
+  if (!els.viewer.open) els.viewer.showModal();
+}
+function syncViewer() {
+  const c = state.byId.get(viewerId);
+  if (!c) return;
+  const owned = state.owned.has(c.id);
+  $("#vName").textContent = c.name;
+  const img = $("#vImg");
+  img.src = c.imgLarge || c.img || "";
+  img.alt = c.name;
+  img.onerror = () => { if (img.src.endsWith(".webp")) img.src = img.src.replace(/\.webp$/, ".png"); };
+  $("#vMeta").innerHTML = [["Set", c.set], ["Number", c.number], ["Rarity", c.rarity], ["ID", c.id]]
+    .filter(([, v]) => v).map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("");
+  const t = $("#vToggle");
+  t.textContent = owned ? "✓ Owned" : "Mark owned";
+  t.className = `btn ${owned ? "owned" : "primary"}`;
+  const i = state.visible.findIndex((v) => v.id === c.id);
+  $("#vPrev").disabled = i <= 0;
+  $("#vNext").disabled = i < 0 || i >= state.visible.length - 1;
+}
+function stepViewer(d) {
+  const i = state.visible.findIndex((v) => v.id === viewerId);
+  const next = state.visible[i + d];
+  if (next) { viewerId = next.id; syncViewer(); }
+}
+$("#vToggle").addEventListener("click", () => toggleOwned(viewerId));
+$("#vPrev").addEventListener("click", () => stepViewer(-1));
+$("#vNext").addEventListener("click", () => stepViewer(1));
+els.viewer.addEventListener("keydown", (e) => {
+  if (e.key === "ArrowLeft") stepViewer(-1);
+  if (e.key === "ArrowRight") stepViewer(1);
+});
+
+// Close dialogs via ✕ buttons or by tapping the backdrop.
+document.querySelectorAll("dialog").forEach((d) => {
+  d.addEventListener("click", (e) => {
+    if (e.target.closest("[data-close]") || e.target === d) d.close();
+  });
+});
+
+/* =========================================================================
+   Header controls
+   ========================================================================= */
+document.querySelectorAll("[data-filter]").forEach((b) => b.addEventListener("click", () => {
+  state.filter = b.dataset.filter;
+  document.querySelectorAll("[data-filter]").forEach((x) => x.setAttribute("aria-pressed", x === b));
+  render();
+}));
+
+let searchTimer = 0;
+els.search.addEventListener("input", () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => { state.query = els.search.value; render(); }, 150);
+});
+
+els.viewToggle.addEventListener("click", () => {
+  state.view = state.view === "grid" ? "binder" : "grid";
+  store.set("view", state.view);
+  render();
+});
+
+/* =========================================================================
+   Settings: source, backup, reset
+   ========================================================================= */
+$("#settingsBtn").addEventListener("click", () => {
+  $("#sArtist").value = state.artist;
+  $("#sLang").value = state.lang;
+  $("#importText").value = "";
+  updateSourceInfo();
+  els.settings.showModal();
+});
+
+function updateSourceInfo() {
+  const m = state.meta;
+  $("#sInfo").textContent = m
+    ? `${state.cards.length} cards from ${m.source}, updated ${new Date(m.fetchedAt).toLocaleString()}.`
+      + (store.persistent ? "" : " ⚠ Storage is unavailable; marks will be lost when you close this page.")
+    : "";
+}
+
+$("#sourceForm").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const artist = $("#sArtist").value.trim();
+  if (!artist) return;
+  state.artist = artist;
+  state.lang = $("#sLang").value;
+  store.set("artist", state.artist);
+  store.set("lang", state.lang);
+  els.settings.close();
+  boot();
+});
+$("#sRefresh").addEventListener("click", () => { els.settings.close(); boot({ force: true }); });
+
+function backupPayload() {
+  return {
+    app: "pokemon-digital-binder", version: 1,
+    artist: state.artist, exportedAt: new Date().toISOString(),
+    owned: [...state.owned].sort(),
+  };
+}
+$("#exportFile").addEventListener("click", () => {
+  const blob = new Blob([JSON.stringify(backupPayload(), null, 2)], { type: "application/json" });
+  const a = Object.assign(document.createElement("a"), {
+    href: URL.createObjectURL(blob),
+    download: `${state.artist.replace(/\W+/g, "-").toLowerCase()}-binder-${new Date().toISOString().slice(0, 10)}.json`,
+  });
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+});
+$("#exportCopy").addEventListener("click", async () => {
+  const text = JSON.stringify(backupPayload());
+  try { await navigator.clipboard.writeText(text); toast("Backup copied to clipboard"); }
+  catch { $("#importText").value = text; $("#importText").select(); toast("Copy the selected text"); }
+});
+$("#importFileBtn").addEventListener("click", () => $("#importFile").click());
+$("#importFile").addEventListener("change", async (e) => {
+  const f = e.target.files[0];
+  if (f) $("#importText").value = await f.text();
+  e.target.value = "";
+});
+$("#importApply").addEventListener("click", () => {
+  let ids;
+  try {
+    const data = JSON.parse($("#importText").value);
+    ids = Array.isArray(data) ? data : data.owned;
+    if (!Array.isArray(ids) || !ids.every((x) => typeof x === "string")) throw 0;
+  } catch { toast("That doesn't look like a binder backup"); return; }
+  const known = ids.filter((id) => state.byId.has(id)).length;
+  const before = state.owned.size;
+  ids.forEach((id) => state.owned.add(id));   // merge, never discard
+  saveOwned();
+  render();
+  els.settings.close();
+  toast(`Imported ${state.owned.size - before} new (${known}/${ids.length} match this binder)`);
+});
+$("#resetOwned").addEventListener("click", () => {
+  if (!confirm(`Clear all ${state.owned.size} owned marks for ${state.artist}? Export a backup first if unsure.`)) return;
+  state.owned.clear();
+  saveOwned();
+  render();
+  els.settings.close();
+  toast("All marks cleared");
+});
+
+/* =========================================================================
+   Boot: show cached cards instantly, refresh from network when stale.
+   ========================================================================= */
+function applyCards(cards, meta) {
+  state.cards = cards;
+  state.byId = new Map(cards.map((c) => [c.id, c]));
+  state.meta = meta;
+  els.status.hidden = true;
+  render();
+}
+
+function showError(msg) {
+  els.status.hidden = false;
+  els.status.innerHTML = `<p><b>Couldn't load cards.</b></p><p style="font-size:13px">${esc(msg)}</p>
+    <p style="font-size:13px">Check your internet connection. Once loaded, the card list is saved for offline use.</p>
+    <button class="btn primary" id="retry">Try again</button>`;
+  $("#retry").addEventListener("click", () => boot({ force: true }));
+}
+
+let bootId = 0;
+async function boot({ force = false } = {}) {
+  const id = ++bootId;
+  els.title.innerHTML = `${esc(state.artist)}<small>Illustrator binder</small>`;
+  document.title = `${state.artist} Binder`;
+  state.owned = new Set(store.get(ownedKey(), []));
+
+  const cached = store.get(`cards:${binderKey()}`);
+  if (cached?.cards?.length) applyCards(cached.cards, cached.meta);
+  else { state.cards = []; render(); els.status.hidden = false; els.status.textContent = "Loading cards…"; }
+
+  const fresh = cached && Date.now() - cached.meta.fetchedAt < CACHE_TTL;
+  if (fresh && !force) return;
+
+  if (force && cached) toast("Refreshing card list…");
+  try {
+    const { cards, source } = await loadCards(state.artist, state.lang);
+    if (id !== bootId) return;  // a newer boot superseded this one
+    const meta = { source, fetchedAt: Date.now() };
+    store.set(`cards:${binderKey()}`, { cards, meta });
+    applyCards(cards, meta);
+    if (force) toast(`Loaded ${cards.length} cards`);
+  } catch (e) {
+    if (id !== bootId) return;
+    if (cached?.cards?.length) toast("Offline: showing saved card list");
+    else showError(e.message);
+  }
+}
+
+// Allow ?artist=Name&lang=ja links to open a specific binder.
+(() => {
+  const p = new URLSearchParams(location.search);
+  if (p.get("artist")) { state.artist = p.get("artist"); store.set("artist", state.artist); }
+  if (p.get("lang")) { state.lang = p.get("lang"); store.set("lang", state.lang); }
+})();
+
+boot();
+
+// Offline support when served over http(s) (service workers don't run on file://).
+if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+}
+</script>
+</body>
+</html>
