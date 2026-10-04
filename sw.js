@@ -1,6 +1,6 @@
 // Service worker: makes the binder work offline once it has been opened
 // over http(s) (e.g. GitHub Pages). Not used when opened as a local file.
-const SHELL = "binder-shell-v2";
+const SHELL = "binder-shell-v3";
 const IMAGES = "binder-images-v1";
 const API = "binder-api-v1";
 const SHELL_FILES = ["./", "index.html", "cards.js", "manifest.webmanifest", "icon.svg", "icon-192.png", "icon-512.png"];
@@ -58,7 +58,7 @@ self.addEventListener("fetch", (e) => {
   const url = new URL(req.url);
   if (url.origin === location.origin) {
     e.respondWith(networkFirst(req, SHELL));
-  } else if (["assets.tcgdex.net", "images.pokemontcg.io", "images.scrydex.com"].includes(url.hostname)) {
+  } else if (["cdn.artofpkm.com", "assets.tcgdex.net", "images.pokemontcg.io", "images.scrydex.com"].includes(url.hostname)) {
     e.respondWith(cacheFirst(req));
   } else if (url.hostname === "api.tcgdex.net" || url.hostname === "api.pokemontcg.io") {
     e.respondWith(networkFirst(req, API));
