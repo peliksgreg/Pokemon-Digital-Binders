@@ -25,16 +25,20 @@ It is a single static page (`index.html`): no build step, no server code, no acc
 
 The Shinji Kanda list matches
 [artofpkm.com/illustrators/shinji-kanda/cards](https://www.artofpkm.com/illustrators/shinji-kanda/cards)
-card for card: 55 cards (45 TCG, 10 TCG Pocket), in the site's order, with the
-site's card images, rarities and set names (Japanese releases, as the site lists them).
-In the card details, **Source** links to the card's page on artofpkm.com.
+with duplicates removed: the site's 55 prints become **42 unique artworks**
+(32 TCG, 10 TCG Pocket), in the site's order, with the site's card images, rarities
+and set names (Japanese releases, as the site lists them).
+
+Mirror foils, deck reprints and re-releases of the same artwork are merged into the
+original print; the card details list them under **Also printed in**, and **Source**
+links to the card's page on artofpkm.com. TCG and Pocket cards stay separate.
 
 The list is embedded inside `index.html` (the `<script id="card-data">` block),
 so the single file works on its own, even opened straight from a phone's Downloads.
 If an artofpkm image fails to load, the app tries TCGdex (same Japanese print),
 then pokemontcg.io / TCGdex (English print of the same artwork).
 
-Marks saved with the earlier English-print list carry over to the matching card.
+Marks saved on an older list (or on a print that is now merged) carry over to the matching card.
 
 To rebuild the list, or build one for another illustrator on artofpkm.com
 (the slug is the one in the site's URL):
@@ -47,6 +51,7 @@ git clone --depth 1 https://github.com/tcgdex/cards-database.git
 git clone --depth 1 https://github.com/PokemonTCG/pokemon-tcg-data.git
 python3 tools/add_fallback_images.py cards.js page.html cards-database pokemon-tcg-data > cards.full.js
 python3 tools/inline_data.py cards.full.js index.html
+python3 tools/dedupe_artworks.py index.html   # merge duplicate prints
 ```
 
 `tools/build_cards.py` builds a list from the open
